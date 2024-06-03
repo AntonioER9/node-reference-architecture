@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /REST_API/
+    schedule:
+      interval: weekly
+    groups:
+      nest:
+        patterns:
+        - "@nestjs*"
+        update-types:
+        - "minor"
+        - "patch"

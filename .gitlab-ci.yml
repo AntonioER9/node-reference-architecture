@@ -1,0 +1,115 @@
+stages:
+  - build
+  - test
+
+services:
+  - docker:dind
+
+.dependabot:
+  tags:
+    - docker
+  image:
+    name: docker.io/andrcuns/dependabot-gitlab:0.11.0
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+    PACKAGE_MANAGER: $CI_JOB_NAME
+    RAILS_ENV: production
+    SETTINGS__GITLAB_URL: $CI_SERVER_URL
+    SETTINGS__STANDALONE: "true"
+  before_script:
+    - cd /home/dependabot/app
+  script:
+    - bundle exec rake "dependabot:update[$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME,$PACKAGE_MANAGER,"/REST_API/"]"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $SCHEDULE_NAME == "dependabot"'
+
+npm:
+  extends: .dependabot
+
+build_Event_Driven:
+  stage: build
+  tags:
+    - docker
+  image:
+    name: docker.io/node:20.13.0-alpine3.18
+  before_script:
+    - cd /Event_Driven
+  script:
+    - echo 'Building Event_Driven'
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - /Event_Driven
+
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - /Event_Driven
+
+build_REST_API:
+  stage: build
+  tags:
+    - docker
+  image:
+    name: docker.io/node:20.13.0-alpine3.18
+  before_script:
+    - cd /REST_API
+  script:
+    - npm install
+    - npm run build 
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes:
+        - /REST_API
+
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - /REST_API
+
+# Fase de pruebas de orders
+test_orders:
+  stage: test
+  tags:
+    - docker
+  image: docker.io/node:20.13.0-alpine3.18
+  services:
+    - docker:dind
+  before_script:
+    - docker-compose -f Event_Driven/docker-compose.yml up -d
+    - docker-compose -f Event_Driven/docker-compose.yml exec orders sh -c "while ! nc -z kafka 9092; do sleep 1; done"
+  script:
+    - docker-compose -f Event_Driven/docker-compose.yml exec orders npm test
+  after_script:
+    - docker-compose -f Event_Driven/docker-compose.yml down
+
+# Fase de pruebas de pricing-methods
+test_pricing_methods:
+  stage: test
+  tags:
+    - docker
+  image: docker.io/node:20.13.0-alpine3.18
+  services:
+    - docker:dind
+  before_script:
+    - docker-compose -f Event_Driven/docker-compose.yml up -d
+    - docker-compose -f Event_Driven/docker-compose.yml exec pricing-methods sh -c "while ! nc -z kafka 9092; do sleep 1; done"
+  script:
+    - docker-compose -f Event_Driven/docker-compose.yml exec pricing-methods npm test
+  after_script:
+    - docker-compose -f Event_Driven/docker-compose.yml down
+
+# Fase de pruebas de shipping-methods
+test_shipping_methods:
+  stage: test
+  tags:
+    - docker
+  image: docker.io/node:20.13.0-alpine3.18
+  services:
+    - docker:dind
+  before_script:
+    - docker-compose -f Event_Driven/docker-compose.yml up -d
+    - docker-compose -f Event_Driven/docker-compose.yml exec shipping-methods sh -c "while ! nc -z kafka 9092; do sleep 1; done"
+  script:
+    - docker-compose -f Event_Driven/docker-compose.yml exec shipping-methods npm test
+  after_script:
+    - docker-compose -f Event_Driven/docker-compose.yml down

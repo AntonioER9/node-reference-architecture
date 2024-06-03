@@ -1,0 +1,4 @@
+export enum EventTypeEnum {
+    ORDER_CREATED = 'ORDER_CREATED',
+    SHIPPING_DETERMINED = 'SHIPPING_DETERMINED'
+}
